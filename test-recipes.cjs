@@ -1,0 +1,20 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const assert=require('node:assert/strict');const path=require('node:path');const {pathToFileURL}=require('node:url');
+(async()=>{const browser=await chromium.launch({channel:'msedge',headless:true});try{
+const p=await browser.newPage({viewport:{width:1400,height:1000}}),errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto(pathToFileURL(path.join(__dirname,'index.html')).href);
+assert.equal(await p.locator('[data-type="split"]').count(),0);
+await p.locator('[data-slot="0"]').click();await p.locator('[data-type="cut"]').click();await p.locator('[data-list-node]').click();assert.equal(await p.locator('[data-recipe-id]').count(),29);
+await p.locator('[data-recipe-id]').first().click();const fixture=await p.evaluate(()=>{const n=state.modules[0],r=selectedRecipes(n)[0];return {id:n.id,r:clone(r)}});assert.ok(fixture.r.inputs.length);
+await p.locator('#recipe-search').fill('不存在的物品xyz');assert.equal(await p.locator('[data-recipe-id]:visible').count(),0);await p.locator('#recipe-search').fill('');
+await p.keyboard.press('Tab');await p.keyboard.press('Escape');await p.locator('[data-control-side="top"][data-control-index="1"]').click();await p.locator(`[data-node="${fixture.id}"]`).click();
+await p.locator(`[data-item-id="${fixture.r.inputs[0]}"]`).check();assert.equal(await p.evaluate(()=>transportItems(state.edges[0])[0]),fixture.r.inputs[0]);
+await p.evaluate(()=>{deselect();addEdge(state.modules[0].id,'control',{b:{side:'top',t:2/6}})});await p.locator(`[data-item-id="${fixture.r.outputs[0]}"]`).check();assert.equal(await p.evaluate(()=>state.edges[1].color),await p.evaluate(()=>state.edges[0].color));
+await p.evaluate(()=>{state.edges[1].color=state.edges[0].color;commit()});assert.equal(await p.locator('.recipe-warning').count(),0);
+const saved=await p.evaluate(()=>clone(state));await p.reload();assert.deepEqual(await p.evaluate(()=>clone(state)),saved);assert.deepEqual(await p.evaluate(()=>validate(clone(state))),saved);
+await p.locator('[data-list-node]').click();await p.locator('[data-recipe-id]').nth(1).click();await p.locator('[data-recipe-id]').first().click();assert.equal(await p.evaluate(()=>transportItems(state.edges[0])[0]),fixture.r.inputs[0]);assert.ok(await p.locator('.recipe-warning').count()>0);
+await p.locator('[data-action="replace"]').click();await p.locator('[data-type="wire"]').click();assert.equal(await p.evaluate(()=>state.modules[0].recipeId),undefined);assert.deepEqual(await p.evaluate(()=>state.edges.map(e=>transportItems(e)[0]||null)),[null,null]);
+await p.locator('#undo').click();assert.equal(await p.evaluate(()=>transportItems(state.edges[0])[0]),fixture.r.inputs[0]);
+await p.locator('#mode-view').click();await p.locator('[data-list-node]').click();assert.equal(await p.locator('[data-recipe-id]').first().isDisabled(),true);await p.locator('#recipe-search').fill('CPU');assert.equal(await p.locator('#recipe-search').isDisabled(),false);
+await p.locator('[data-list-edge]').first().click();assert.equal(await p.locator('[data-item-id]').first().isDisabled(),true);
+await p.locator('[data-list-node]').click();await p.screenshot({path:path.join(__dirname,'preview-recipes.png')});
+assert.deepEqual(errors,[]);console.log('PASS: 148 recipes, module selection/search, single transport item, color checks, replacement cleanup/undo, persistence, validation and view-mode protections');
+}finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});

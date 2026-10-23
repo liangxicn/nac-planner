@@ -1,0 +1,18 @@
+# Local dependencies and generated test output
+node_modules/
+playwright-report/
+test-results/
+coverage/
+*.log
+
+# Local secrets and editor/OS files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini

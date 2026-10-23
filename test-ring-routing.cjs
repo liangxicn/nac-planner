@@ -1,0 +1,13 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');const assert=require('node:assert/strict');const path=require('node:path');const {pathToFileURL}=require('node:url');
+(async()=>{const b=await chromium.launch({channel:'msedge',headless:true});try{const p=await b.newPage({viewport:{width:1400,height:1000}}),errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto(pathToFileURL(path.join(__dirname,'index.html')).href);
+const result=await p.evaluate(()=>{
+state.modules=[{id:'a',type:'matrix',slot:0,name:'',rotation:0},{id:'b',type:'parts',slot:1,name:'',rotation:0}];
+addEdge('a','b');const outer=clone(state.edges.at(-1));addEdge('control','a',{a:{side:'top',t:1/6}});const inner=clone(state.edges.at(-1));addEdge('b','control',{b:{side:'top',t:5/6}});const reverse=clone(state.edges.at(-1));return {outer,inner,reverse,clear:state.edges.every(e=>!routeConflict(e))};
+});assert.equal(result.outer.a.side,'top');assert.equal(result.outer.b.side,'top');assert.ok(result.outer.points.some(p=>p.y<63));assert.equal(result.inner.b.side,'bottom');assert.deepEqual(result.inner.a,{side:'top',t:1/6});assert.equal(result.reverse.a.side,'bottom');assert.deepEqual(result.reverse.b,{side:'top',t:5/6});assert.ok(result.inner.points.every(p=>p.y>=195&&p.y<=415));assert.equal(result.clear,true);
+const saved=await p.evaluate(()=>clone(state));await p.reload();assert.deepEqual(await p.evaluate(()=>clone(state)),saved);
+const around=await p.evaluate(()=>{state.edges=[];state.modules[1].slot=6;addEdge('a','b');return {e:clone(state.edges[0]),clear:state.edges.every(e=>!routeConflict(e))}});assert.equal(around.clear,true);assert.ok(around.e.points.some(p=>p.x<=163||p.x>=1077));assert.equal(around.e.a.side,'top');assert.equal(around.e.b.side,'bottom');
+// Fill a preferred side, then verify automatic fallback still connects.
+const fallback=await p.evaluate(()=>{state.edges=[];state.modules[1].slot=1;const r=rect(node('a'));for(let i=0;i<5;i++){state.edges.push({id:'held'+i,from:'a',to:'control',a:{side:'top',t:(i+1)/6},b:{side:'bottom',t:i/6},points:[],color:COLORS[i],layer:2})}const e={id:'fallback',from:'a',to:'b',a:{side:'right',t:.5},b:{side:'left',t:.5},points:[],color:COLORS[0]};state.edges.push(e);return {ok:routeNewConnection(e),side:e.a.side,clear:!routeConflict(e)}});assert.equal(fallback.ok,true);assert.notEqual(fallback.side,'top');assert.equal(fallback.clear,true);
+assert.deepEqual(errors,[]);console.log('PASS: module links prefer outward ports/perimeter; control links prefer inner ports both directions with exact sockets; blocked outer side falls back; existing saved routes unchanged');
+}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
+
